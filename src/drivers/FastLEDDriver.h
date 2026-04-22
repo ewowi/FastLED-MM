@@ -29,6 +29,10 @@ public:
     void setup() override {
         FastLED.addLeds<WS2812B, FLM_PIN, GRB>(flm_leds, FLM_NUM_LEDS);
         FastLED.setBrightness(static_cast<uint8_t>(brightness_));
+        // Cap at 30fps: at 90fps the RMT peripheral occupies ~70% of radio
+        // time on ESP32-S3, starving WiFi beacon transmission and making the
+        // AP invisible in scans. 30fps drops duty cycle to ~23%.
+        FastLED.setMaxRefreshRate(30);
         addControl(brightness_, "brightness", "range", 0.0f, 255.0f);
     }
 
