@@ -16,6 +16,7 @@
 // moves to a reusable helper (tracked in projectMM R04S10).
 
 #include <Arduino.h>
+#include "core/AppSetup.h"
 #include "core/Scheduler.h"
 #include "core/ModuleManager.h"
 #include "core/TypeRegistry.h"
@@ -82,17 +83,18 @@ static void registerRoutes() {
 }
 
 static void ensureDefaultPipeline() {
-    // On first boot (no state file) add the default effect and driver.
-    // On subsequent boots modulemanager.json restores the previous state.
+    // On first boot add the default effect and driver.
+    // Check by type so network modules added by ensureNetworkModules don't
+    // fool the size==0 test into thinking this is not a first boot.
     JsonDocument doc;
     mm.getModulesJson(doc.to<JsonArray>());
-    if (doc.as<JsonArray>().size() == 0) {
-        JsonDocument empty;
-        auto ep = empty.as<JsonObjectConst>();
-        mm.addModule("WaveRainbow2DEffect", "fx1",     ep, ep, 0, "");
-        mm.addModule("FastLEDDriverModule", "driver1", ep, ep, 1, "");
-        mm.saveAllState();
-    }
+    for (JsonObjectConst m : doc.as<JsonArray>())
+        if (strcmp(m["type"] | "", "WaveRainbow2DEffect") == 0) return;
+    JsonDocument empty;
+    auto ep = empty.as<JsonObjectConst>();
+    mm.addModule("WaveRainbow2DEffect", "fx1",     ep, ep, 0, "");
+    mm.addModule("FastLEDDriverModule", "driver1", ep, ep, 1, "");
+    mm.saveAllState();
 }
 
 // ---------- FreeRTOS tasks (dual-core) ----------------------------------------
@@ -136,6 +138,7 @@ void setup() {
 
     mm.setup();
     scheduler.setup();
+    pal::ensureNetworkModules(mm);  // starts WiFi AP/STA and initialises lwIP before server.begin()
     ensureDefaultPipeline();
 
     registerRoutes();
