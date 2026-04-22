@@ -1,6 +1,6 @@
 #pragma once
 #include <FastLED.h>
-#include "core/StatefulModule.h"
+#include "core/ProducerModule.h"
 #include "FlmPixels.h"
 
 // WaveRainbow2D — animated 2D diagonal rainbow with a sine-wave ripple.
@@ -9,11 +9,14 @@
 // ripple that shifts with y and time, producing a smooth flowing pattern
 // across the panel. Uses FastLED's integer sin8() — no floating-point in loop().
 //
+// Extends ProducerModule: registers flm_leds[] as the pixel buffer so
+// ConsumerModule subclasses can read it via bufferPtr() / bufferLen().
+//
 // Controls (visible in the web UI and adjustable at runtime):
 //   speed       (1-10)   — animation rate
 //   hue_offset  (0-255)  — global hue shift; set it to rotate the colour palette
 
-class WaveRainbow2DEffect : public StatefulModule {
+class WaveRainbow2DEffect : public ProducerModule {
 public:
     const char* name()     const override { return "WaveRainbow2D"; }
     const char* category() const override { return "effect"; }
@@ -21,6 +24,7 @@ public:
     uint8_t     preferredCore() const override { return 0; }
 
     void setup() override {
+        declareBuffer(flm_leds, FLM_NUM_LEDS, sizeof(CRGB));
         addControl(speed_,     "speed",      "range", 1.0f, 10.0f);
         addControl(hueOffset_, "hue_offset", "range", 0.0f, 255.0f);
     }

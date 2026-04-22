@@ -1,6 +1,6 @@
 #pragma once
 #include <FastLED.h>
-#include "core/StatefulModule.h"
+#include "core/ConsumerModule.h"
 #include "FlmPixels.h"
 #include "FlmConfig.h"
 
@@ -9,13 +9,18 @@
 // Runs on Core 1 (output core) by preferredCore().
 // Brightness is adjustable at runtime from the web UI.
 //
+// Extends ConsumerModule: wired to a WaveRainbow2DEffect (or any ProducerModule)
+// via setInput("producer", &effect). The producer's buffer is accessible via
+// producer_->bufferPtr() if needed; this driver reads flm_leds[] directly for
+// compatibility with the shared-array pattern.
+//
 // This module owns the FastLED hardware binding: it calls FastLED.addLeds()
 // in setup(). Exactly one FastLEDDriver should be in any pipeline.
 //
 // To change LED type (e.g., SK6812, APA102) or pin, update FlmConfig.h
 // and change the template arguments in setup() below.
 
-class FastLEDDriverModule : public StatefulModule {
+class FastLEDDriverModule : public ConsumerModule {
 public:
     const char* name()     const override { return "FastLEDDriver"; }
     const char* category() const override { return "driver"; }
