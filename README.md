@@ -1,3 +1,5 @@
+<img width="640" height="360" alt="FastLED-MM" src="https://github.com/user-attachments/assets/ce71829c-8563-4d4b-8969-7d3a0e17cbe0" />
+
 # FastLED-MM
 
 FastLED effects and drivers running inside the [projectMM](https://github.com/ewowi/projectMM) module runtime.
