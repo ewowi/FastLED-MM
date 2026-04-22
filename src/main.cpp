@@ -12,6 +12,10 @@
 #include <Arduino.h>
 #include <FastLED.h>
 #include "core/AppSetup.h"
+#include "core/Scheduler.h"
+#include "core/ModuleManager.h"
+#include "core/HttpServer.h"
+#include "core/WsServer.h"
 #include "FlmConfig.h"
 #include "FlmPixels.h"
 #include "effects/WaveRainbow2D.h"
