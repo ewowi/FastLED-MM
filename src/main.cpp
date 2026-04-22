@@ -82,7 +82,7 @@ public:
         // Cap at 30fps: at 90fps the RMT peripheral occupies ~70% of radio
         // time on ESP32-S3, starving WiFi beacon transmission and making the
         // AP invisible in scans. 30fps drops duty cycle to ~23%.
-        FastLED.setMaxRefreshRate(30);
+        // FastLED.setMaxRefreshRate(30);
         addControl(brightness_, "brightness", "range", 0.0f, 255.0f);
     }
 
@@ -123,6 +123,7 @@ static WsServer      ws;
 // Guard with hasModuleType so subsequent boots skip this.
 static void firstBoot(ModuleManager& mm) {
     if (pal::hasModuleType(mm, "WaveRainbow2DEffect")) return;
+    if (pal::hasModuleType(mm, "FastLEDDriverModule")) return;
     JsonDocument d; auto ep = d.as<JsonObjectConst>();
     mm.addModule("WaveRainbow2DEffect", "fx1",     ep, ep, 0, "");
     mm.addModule("FastLEDDriverModule", "driver1", ep, ep, 1, "");

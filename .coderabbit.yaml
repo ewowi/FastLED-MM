@@ -1,0 +1,40 @@
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  path_instructions:
+    - path: "src/**/*.h"
+      instructions: >
+        C++17 embedded/PC code. Check: no heap allocations in loop(),
+        no blocking calls in loop(), teardown() must release everything
+        setup() acquired, healthReport() must be implemented.
+        Review for memory safety and correct RAII patterns.
+    - path: "src/**/*.cpp"
+      instructions: >
+        C++17. Check: REGISTER_MODULE calls belong in ModuleRegistrations.cpp only,
+        not in individual module headers. Logger macros (LOG_SETUP, LOG_DEBUG, etc.)
+        should replace bare printf() calls in module code.
+    - path: "tests/**/*.cpp"
+      instructions: >
+        doctest unit tests. Every module change needs behavioral tests, not
+        just smoke (no-crash) or format (schema shape) tests. Prefer tests
+        that verify actual output values, state transitions, or boundary conditions.
+    - path: "docs/**/*.md"
+      instructions: >
+        No em dashes (use comma, colon, or parentheses). No trailing summaries.
+        No filler openers. Every module doc page must include: controls table,
+        healthReport format, platform notes (ESP32 vs PC), test coverage table.
+    - path: "src/pal/Pal.h"
+      instructions: >
+        Platform abstraction layer. All platform-specific code must have a three-way
+        guard: #if defined(ARDUINO), #elif defined(IDF_VER), #else (PC).
+        No module code should #ifdef ESP32 directly.
+
+chat:
+  auto_reply: true
