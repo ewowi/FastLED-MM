@@ -23,10 +23,13 @@ public:
     const char* tags()     const override { return "🔥🟦"; }
     uint8_t     preferredCore() const override { return 0; }
 
+    uint16_t snapshotWidth()  const override { return FLM_WIDTH; }
+    uint16_t snapshotHeight() const override { return FLM_HEIGHT; }
+
     void setup() override {
         declareBuffer(flm_leds, FLM_NUM_LEDS, sizeof(CRGB));
-        addControl(speed_,     "speed",      "range", 1.0f, 10.0f);
-        addControl(hueOffset_, "hue_offset", "range", 0.0f, 255.0f);
+        addControl(speed_,     "speed",      "slider", 1.0f, 10.0f);
+        addControl(hueOffset_, "hue_offset", "slider", 0.0f, 255.0f);
     }
 
     void loop() override {

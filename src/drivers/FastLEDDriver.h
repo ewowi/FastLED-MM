@@ -33,7 +33,7 @@ public:
         // time on ESP32-S3, starving WiFi beacon transmission and making the
         // AP invisible in scans. 30fps drops duty cycle to ~23%.
         FastLED.setMaxRefreshRate(30);
-        addControl(brightness_, "brightness", "range", 0.0f, 255.0f);
+        addControl(brightness_, "brightness", "slider", 0.0f, 255.0f);
     }
 
     void loop() override {
