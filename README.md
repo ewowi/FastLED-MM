@@ -8,27 +8,37 @@ FastLED effects and drivers running inside the [projectMM](https://github.com/ew
 
 FastLED-MM is a PlatformIO project that wires two things together:
 
-- **FastLED** — the pixel math and hardware driver library you already know. We use the latest master branch to get all the new features (e.g. [FastLED Audio](https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md), Fixed point math, [FastLED Channels API](https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md))
+- **FastLED** — the pixel math and hardware driver library you already know. We use the latest master branch (The to be released FastLED 4 version) to get all the new features (e.g. [FastLED Audio](https://github.com/FastLED/FastLED/blob/master/src/fl/audio/README.md), Fixed point math, [FastLED Channels API](https://github.com/FastLED/FastLED/blob/master/src/fl/channels/README.md))
 - **projectMM** — a module runtime that adds a web UI, live control, dual-core dispatch, and persistent state on top of your effect
 
 You write an effect that fills a shared `CRGB leds[]` array, exactly like a regular FastLED sketch. projectMM handles the rest: WiFi, [ASP Async WebServer](https://github.com/ESP32Async/ESPAsyncWebServer), WebSocket state push, REST API, and per-module timing.
 
-projectMM is a brand new project, as is FastLED-MM (April 2026) and are both under heavy development so expect more features soon. Like the repo and log a [FastLED-MM issue](https://github.com/MoonModules/FastLED-MM/issues) of you want to participate.
+projectMM is a brand new project, as is FastLED-MM (April 2026) and are both under heavy development so expect more features soon. So don't expect evrything to work fluently yet. Like the repo and log a [FastLED-MM issue](https://github.com/MoonModules/FastLED-MM/issues) of you want to participate.
 
 FastLED-MM is an example of using projectMM as a standalone library. Any ESP32 project can use projectMM to embed custom code in a full featured application. Log a [projectMM issue](https://github.com/ewowi/projectMM/issues) if you need help.
+
+If you like projectMM or FastLED-MM, give it a ⭐️, fork it or open an issue or pull request. It helps the projects grow, improve and get noticed.
 
 ## What you get for free
 
 | Feature | How |
 |---------|-----|
+| WiFi  support | add your home network credentials in the UI and the device joins it; the AP stays up as a fallback |
 | Web UI | Adjust effect controls live in the browser |
+| Live LED preview | see your panel animate in the browser before looking at the hardware |
+| Log panel | real-time serial output in the browser tab, no USB required |
+| Art-Net | receive and send Art-Net packages over the network and use in your FastLED pipeline |
+| FastLED audio integration | Run the brand new FastLED audio |
+| ESP32 devices | Currently ESP32dev and ESP32-S3, P4 follows soon |
 | WebSocket push | Control values update in the browser |
 | Dual-core dispatch | Effect on Core 0, `FastLED.show()` on Core 1 |
 | Persistent state | All changes made survive reboots (LittleFS) |
 | REST API | `GET /api/modules`, `POST /api/control`, `GET /api/system` |
 | Per-module timing | See exact frame cost per effect in the web UI |
-| ESP32 devices | Currently ESP32dev and ESP32-S3, P4 follows soon |
 | ESP-IDF 5.5 | Latest ESP32 firmware |
+| Much more | Much more to come |
+
+Read the [user guide](https://ewowi.github.io/projectMM/user-guide/getting-started/) for more info
 
 ## Quick start
 
@@ -41,6 +51,8 @@ constexpr uint8_t  PIN      = 2;   // data pin
 constexpr uint16_t WIDTH    = 16;  // panel width
 constexpr uint16_t HEIGHT   = 16;  // panel height
 ```
+
+When using the new FastLED channels API, this can also be added in a Module and can be set in runtime!
 
 ### 2. Flash
 
