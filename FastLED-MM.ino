@@ -11,6 +11,10 @@
 #include <Arduino.h>
 #include <FastLED.h>
 #include "src/core/AppSetup.h"
+#include "src/core/Scheduler.h"
+#include "src/core/ModuleManager.h"
+#include "src/core/HttpServer.h"
+#include "src/core/WsServer.h"
 #include "src/core/ProducerModule.h"
 #include "src/core/ConsumerModule.h"
 
@@ -25,6 +29,7 @@ inline uint16_t idx(uint8_t x, uint8_t y) {
     return static_cast<uint16_t>(y) * WIDTH + x;
 }
 
+// Shared pixel array — written by effects, read by the driver.
 CRGB leds[NUM_LEDS];
 
 class WaveRainbow2DEffect : public ProducerModule {
@@ -36,8 +41,8 @@ public:
 
     void setup() override {
         declareBuffer(leds, NUM_LEDS, sizeof(CRGB));
-        addControl(speed_,     "speed",      "range", 1.0f, 10.0f);
-        addControl(hueOffset_, "hue_offset", "range", 0.0f, 255.0f);
+        addControl(speed_,     "speed",      "slider", 1.0f, 10.0f);
+        addControl(hueOffset_, "hue_offset", "slider", 0.0f, 255.0f);
     }
 
     void loop() override {
@@ -52,6 +57,9 @@ public:
     }
 
     void teardown() override {}
+
+    // Suppress ProducerModule::snapshot() — FastLEDDriverModule owns the preview.
+    bool snapshot(std::vector<uint8_t>&) const override { return false; }
 
     void healthReport(char* buf, size_t len) const override {
         snprintf(buf, len, "speed=%.0f hue=%.0f", speed_, hueOffset_);
@@ -77,7 +85,7 @@ public:
         // time on ESP32-S3, starving WiFi beacon transmission and making the
         // AP invisible in scans. 30fps drops duty cycle to ~23%.
         FastLED.setMaxRefreshRate(30);
-        addControl(brightness_, "brightness", "range", 0.0f, 255.0f);
+        addControl(brightness_, "brightness", "slider", 0.0f, 255.0f);
     }
 
     void loop() override {
@@ -93,6 +101,20 @@ public:
             FastLED.setBrightness(static_cast<uint8_t>(brightness_));
     }
 
+    bool snapshot(std::vector<uint8_t>& buf) const override {
+        buf.resize(7 + NUM_LEDS * 3);
+        buf[0] = 0x02;
+        buf[1] = WIDTH & 0xFF;  buf[2] = WIDTH >> 8;
+        buf[3] = HEIGHT & 0xFF; buf[4] = HEIGHT >> 8;
+        buf[5] = 1;             buf[6] = 0;
+        for (uint16_t i = 0; i < NUM_LEDS; ++i) {
+            buf[7 + i*3 + 0] = leds[i].r;
+            buf[7 + i*3 + 1] = leds[i].g;
+            buf[7 + i*3 + 2] = leds[i].b;
+        }
+        return true;
+    }
+
     void healthReport(char* buf, size_t len) const override {
         snprintf(buf, len, "brightness=%.0f fps=%u", brightness_, FastLED.getFPS());
     }
@@ -103,14 +125,18 @@ private:
     float brightness_ = 64.0f;
 };
 
+// Register modules so the web UI and REST API can instantiate them.
 REGISTER_MODULE(WaveRainbow2DEffect)
 REGISTER_MODULE(FastLEDDriverModule)
 
+// projectMM runtime objects.
 static Scheduler     scheduler;
 static ModuleManager mm(scheduler);
 static HttpServer    server(80);
 static WsServer      ws;
 
+// Called once on first boot to populate the default pipeline.
+// Guard with hasModuleType so subsequent boots skip this.
 static void firstBoot(ModuleManager& mm) {
     if (pal::hasModuleType(mm, "WaveRainbow2DEffect")) return;
     if (pal::hasModuleType(mm, "FastLEDDriverModule")) return;

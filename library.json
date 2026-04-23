@@ -5,7 +5,7 @@
   "keywords": ["fastled", "led", "esp32", "projectmm", "effects"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/ewowi/FastLED-MM.git"
+    "url": "https://github.com/MoonModules/FastLED-MM.git"
   },
   "authors": [{ "name": "MoonModules", "url": "https://moonmodules.org" }],
   "license": "MIT",
