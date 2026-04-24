@@ -18,6 +18,7 @@
 #include "core/WsServer.h"
 #include "core/ProducerModule.h"
 #include "core/ConsumerModule.h"
+#include "modules/drivers/PreviewModule.h"
 
 constexpr uint8_t  PIN      = 2;    // data pin to the first LED strip
 constexpr uint16_t WIDTH    = 16;   // panel width in pixels
@@ -59,9 +60,6 @@ public:
 
     void teardown() override {}
 
-    // Suppress ProducerModule::snapshot() — FastLEDDriverModule owns the preview.
-    bool snapshot(std::vector<uint8_t>&) const override { return false; }
-
     void healthReport(char* buf, size_t len) const override {
         snprintf(buf, len, "speed=%.0f hue=%.0f", speed_, hueOffset_);
     }
@@ -102,20 +100,6 @@ public:
             FastLED.setBrightness(static_cast<uint8_t>(brightness_));
     }
 
-    bool snapshot(std::vector<uint8_t>& buf) const override {
-        buf.resize(7 + NUM_LEDS * 3);
-        buf[0] = 0x02;
-        buf[1] = WIDTH & 0xFF;  buf[2] = WIDTH >> 8;
-        buf[3] = HEIGHT & 0xFF; buf[4] = HEIGHT >> 8;
-        buf[5] = 1;             buf[6] = 0;
-        for (uint16_t i = 0; i < NUM_LEDS; ++i) {
-            buf[7 + i*3 + 0] = leds[i].r;
-            buf[7 + i*3 + 1] = leds[i].g;
-            buf[7 + i*3 + 2] = leds[i].b;
-        }
-        return true;
-    }
-
     void healthReport(char* buf, size_t len) const override {
         snprintf(buf, len, "brightness=%.0f fps=%u", brightness_, FastLED.getFPS());
     }
@@ -129,6 +113,7 @@ private:
 // Register modules so the web UI and REST API can instantiate them.
 REGISTER_MODULE(WaveRainbow2DEffect)
 REGISTER_MODULE(FastLEDDriverModule)
+REGISTER_MODULE(PreviewModule)
 
 // projectMM runtime objects.
 static Scheduler     scheduler;
@@ -140,10 +125,22 @@ static WsServer      ws;
 // Guard with hasModuleType so subsequent boots skip this.
 static void firstBoot(ModuleManager& mm) {
     if (pal::hasModuleType(mm, "WaveRainbow2DEffect")) return;
-    if (pal::hasModuleType(mm, "FastLEDDriverModule")) return;
-    JsonDocument d; auto ep = d.as<JsonObjectConst>();
-    mm.addModule("WaveRainbow2DEffect", "fx1",     ep, ep, 0, "");
-    mm.addModule("FastLEDDriverModule", "driver1", ep, ep, 1, "");
+    JsonDocument d;
+    auto ep = d.as<JsonObjectConst>();
+
+    mm.addModule("WaveRainbow2DEffect", "fx1",      ep, ep, 0, "");
+    mm.addModule("FastLEDDriverModule", "driver1",  ep, ep, 1, "");
+
+    // Add PreviewModule wired to fx1 (WaveRainbow2DEffect / ProducerModule).
+    // width=16, height=16 matches the 16x16 panel geometry defined by WIDTH/HEIGHT.
+    JsonDocument pd;
+    pd["width"]  = WIDTH;
+    pd["height"] = HEIGHT;
+    JsonDocument inp;
+    inp["source"] = "fx1";
+    mm.addModule("PreviewModule", "preview1",
+                 pd.as<JsonObjectConst>(), inp.as<JsonObjectConst>(), 1, "");
+
     mm.saveAllState();
 }
 
