@@ -10,7 +10,7 @@
 
 #include <Arduino.h>
 #include <FastLED.h>
-#include <src/projectMM.h>
+#include "src/projectMM.h"
 
 constexpr uint8_t  PIN      = 2;    // data pin to the first LED strip
 constexpr uint16_t WIDTH    = 16;   // panel width in pixels
@@ -123,12 +123,6 @@ private:
 REGISTER_MODULE(WaveRainbow2DEffect)
 REGISTER_MODULE(FastLEDDriverModule)
 
-// projectMM runtime objects.
-static Scheduler     scheduler;
-static ModuleManager mm(scheduler);
-static HttpServer    server(80);
-static WsServer      ws;
-
 // Called once on first boot to populate the default pipeline.
 // Guard with hasModuleType so subsequent boots skip this.
 static void firstBoot(ModuleManager& mm) {
@@ -142,7 +136,7 @@ static void firstBoot(ModuleManager& mm) {
 
 void setup() {
     Serial.begin(115200);
-    pal::embeddedSetup(mm, scheduler, server, ws, nullptr, firstBoot);
+    projectMM::setup(firstBoot);
 }
 
-void loop() { pal::suspend_forever(); }
+void loop() { projectMM::loop(); }
