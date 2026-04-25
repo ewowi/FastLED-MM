@@ -112,12 +112,6 @@ REGISTER_MODULE(WaveRainbow2DEffect)
 REGISTER_MODULE(FastLEDDriverModule)
 REGISTER_MODULE(PreviewModule)
 
-// projectMM runtime objects.
-static Scheduler     scheduler;
-static ModuleManager mm(scheduler);
-static HttpServer    server(80);
-static WsServer      ws;
-
 // Called once on first boot to populate the default pipeline.
 // Guard with hasModuleType so subsequent boots skip this.
 static void firstBoot(ModuleManager& mm) {
@@ -139,7 +133,7 @@ static void firstBoot(ModuleManager& mm) {
 
 void setup() {
     Serial.begin(115200);
-    pal::embeddedSetup(mm, scheduler, server, ws, nullptr, firstBoot);
+    projectMM::setup(firstBoot);
 }
 
-void loop() { pal::suspend_forever(); }
+void loop() { projectMM::loop(); }
