@@ -7,5 +7,4 @@
 //   2. Install FastLED via the Library Manager
 //   3. Open this sketch and flash
 
-
 #include "src/main.cpp"

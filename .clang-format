@@ -1,0 +1,11 @@
+# clang-format configuration for projectMM.
+# Based on the MoonLight project style (Google base, 2-space indent, no column limit).
+# Applied project-wide in Sprint 7; replaces the previous informal 4-space style.
+BasedOnStyle: Google
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ColumnLimit: 1000
+IndentCaseLabels: false
+IndentPPDirectives: BeforeHash
+PPIndentWidth: -1
