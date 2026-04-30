@@ -7,4 +7,4 @@
 //   2. Install FastLED via the Library Manager
 //   3. Open this sketch and flash
 
-#include "src/main.cpp"
+#include "src/sketches/minimal.cpp"  // swap for flowfields.cpp to use that sketch

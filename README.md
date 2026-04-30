@@ -40,23 +40,64 @@ If you like projectMM or FastLED-MM, give it a ⭐️, fork it or open an issue 
 
 Read the [user guide](https://ewowi.github.io/projectMM/user-guide/getting-started/) for more info
 
+## Sketches
+
+All runnable examples live in `src/sketches/`. Each sketch is a self-contained `.cpp` file with its own effect classes, panel config, and `setup()`/`loop()`.
+
+| Sketch | Description | Panel |
+|--------|-------------|-------|
+| `minimal.cpp` | WaveRainbow2D effect with serpentine panel support | 16×16 |
+| `flowfields.cpp` | FlowFields engine with full parameter set | 44×44 |
+
+### Selecting a sketch in PlatformIO
+
+`platformio.ini` has one environment per sketch. Pick the one matching your hardware and use **PlatformIO: Set Default Environment** or set `default_envs` in `platformio.ini`:
+
+| Environment | Sketch | Board |
+|-------------|--------|-------|
+| `minimal` | minimal.cpp | esp32dev |
+| `flowfields` | flowfields.cpp | esp32dev |
+| `flowfields_s3` | flowfields.cpp | ESP32-S3 (16 MB) |
+
+### Selecting a sketch in Arduino IDE
+
+`FastLED-MM.ino` includes one sketch at a time. Swap the include at the bottom of the file:
+
+```cpp
+#include "src/sketches/minimal.cpp"     // simple 16x16 wave effect
+// #include "src/sketches/flowfields.cpp"  // full FlowFields engine
+```
+
+### Adding your own sketch
+
+1. Create `src/sketches/mysketch.cpp` — use `minimal.cpp` as a starting point.
+2. Set `PIN`, `WIDTH`, `HEIGHT` and `NUM_LEDS` at the top to match your panel.
+3. Add an environment to `platformio.ini`:
+
+```ini
+[env:mysketch]
+board = esp32dev
+src_filter = -<*> +<sketches/mysketch.cpp>
+board_build.arduino.partitions = partitions/esp32dev.csv
+```
+
 ## Quick start
 
 ### 1. Configure hardware
 
-Edit `main.cpp` (VSCode/PlatformIO) or `FastLED-MM.ino` (Arduino IDE):
+Open the sketch you want to use (`src/sketches/minimal.cpp` or another) and set the panel constants at the top:
 
 ```cpp
-constexpr uint8_t  PIN      = 2;   // data pin
-constexpr uint16_t WIDTH    = 16;  // panel width
-constexpr uint16_t HEIGHT   = 16;  // panel height
+constexpr uint8_t  PIN    = 2;   // data pin
+constexpr uint16_t WIDTH  = 16;  // panel width
+constexpr uint16_t HEIGHT = 16;  // panel height
 ```
 
 When using the new FastLED channels API, this can also be added in a Module and can be set in runtime!
 
 ### 2. Flash
 
-Upload in VSCode platformIO or Arduino IDE
+Select the matching environment in PlatformIO and upload, or use Arduino IDE.
 
 ### 3. Connect
 
@@ -64,11 +105,11 @@ Upload in VSCode platformIO or Arduino IDE
 - Open `http://4.3.2.1` in a browser
 - Connect to your local network in the Network module
 
-The `WaveRainbow2D` effect is running. Use the web UI to adjust parameters live.
+The effect from the selected sketch is running. Use the web UI to adjust parameters live.
 
 ## Adding your own effect
 
-Create a new subclass of StatefulModule in `src/main.cpp` or `FastLED-MM.ino`:
+Create a new subclass of `ProducerModule` inside your sketch file:
 
 ```cpp
 class MyEffect : public StatefulModule {
@@ -119,20 +160,23 @@ Flash and use the web UI to add your effect to the pipeline.
 ## Architecture
 
 ```
-leds[]  (shared CRGB array in main.cpp)
+src/sketches/minimal.cpp  (or flowfields.cpp, or your own)
      |
-     +-- WaveRainbow2DEffect (Core 0) — writes pixels each tick
+     +-- leds[]      — logical pixel array, row-major, read by PreviewModule
+     +-- physLeds[]  — physical pixel array, serpentine-remapped for the strip
      |
-     +-- FastLEDDriverModule  (Core 1) — calls FastLED.show() each tick
+     +-- YourEffect        (Core 0) — writes leds[] each tick
+     +-- FastLEDDriverModule (Core 1) — remaps leds[]→physLeds[], calls FastLED.show()
+     +-- PreviewModule     (Core 1) — streams leds[] to the browser over WebSocket
 ```
 
-Both modules are `StatefulModule` subclasses managed by projectMM's `Scheduler` and `ModuleManager`. The shared array is the pixel handoff between effect and driver. In more advances scripts (as done in projectMM) double buffering, blending and such can be done to exploit parallelism
+Each sketch is a self-contained `.cpp` selected at build time via `src_filter` in `platformio.ini`. The effect and driver are `StatefulModule` subclasses managed by projectMM's `Scheduler`. A semaphore in `AppSetup` ensures Core 0 finishes writing `leds[]` before Core 1 reads it — no extra locking needed in your effect code.
 
 ## Roadmap
 
 - **Audio module**: a third `StatefulModule` that reads microphone data from the new FastLED Audio and publishes to `KvStore` for effects to react to. Can be dispatched in a separate task.
 - **FastLED Channels API**: use the newer `FastLED::addLeds()` channels API when targeting multi-strip setups.
-- Further tuning of `src/main.cpp` and `FastLED-MM.ino` moving any code which is not user-friendly into the projectMM library.
+- Further tuning of `src/sketches/` and `FastLED-MM.ino` moving any code which is not user-friendly into the projectMM library.
 
 ## Requirements
 
