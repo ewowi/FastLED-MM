@@ -46,7 +46,7 @@ class FlowFieldsEffect : public ProducerModule {
     addControl(globalSpeed_, "globalSpeed", "slider", 0.1f, 5.0f);
     addControl(persistence_, "persistence", "slider", 0.01f, 2.0f);
     addControl(colorShift_, "colorShift", "slider", 0.0f, 1.0f);
-    addControl(numDots_, "numDots", "slider", 1.0f, 20.0f);
+    addControl(numDots_, "numDots", "slider", 1, 20);
     addControl(dotDiam_, "dotDiam", "slider", 0.5f, 5.0f);
     addControl(orbitSpeed_, "orbitSpeed", "slider", 0.01f, 25.0f);
     addControl(orbitDiam_, "orbitDiam", "slider", 1.0f, 30.0f);
@@ -81,44 +81,6 @@ class FlowFieldsEffect : public ProducerModule {
     // 2. Initialise the engine for this panel.
     engine_.setup(WIDTH, HEIGHT, NUM_LEDS, XY);
 
-    // 3. Bind: redirect engine cVars to the floats projectMM updates.
-    //    Called once here — run() pays only a pointer dereference per param.
-    engine_.bindParam("emitter", &emitterIdxFloat_);
-    engine_.bindParam("flow", &flowIdxFloat_);
-    engine_.bindParam("globalSpeed", &globalSpeed_);
-    engine_.bindParam("persistence", &persistence_);
-    engine_.bindParam("colorShift", &colorShift_);
-    engine_.bindParam("dotDiam", &dotDiam_);
-    engine_.bindParam("orbitSpeed", &orbitSpeed_);
-    engine_.bindParam("orbitDiam", &orbitDiam_);
-    engine_.bindParam("swarmSpeed", &swarmSpeed_);
-    engine_.bindParam("swarmSpread", &swarmSpread_);
-    engine_.bindParam("lineSpeed", &lineSpeed_);
-    engine_.bindParam("lineAmp", &lineAmp_);
-    engine_.bindParam("driftSpeed", &driftSpeed_);
-    engine_.bindParam("noiseScale", &noiseScale_);
-    engine_.bindParam("noiseBand", &noiseBand_);
-    engine_.bindParam("scale", &scale_);
-    engine_.bindParam("rotateSpeedX", &rotateSpeedX_);
-    engine_.bindParam("rotateSpeedY", &rotateSpeedY_);
-    engine_.bindParam("rotateSpeedZ", &rotateSpeedZ_);
-    engine_.bindParam("jetForce", &jetForce_);
-    engine_.bindParam("jetAngle", &jetAngle_);
-    engine_.bindParam("xSpeed", &xSpeed_);
-    engine_.bindParam("ySpeed", &ySpeed_);
-    engine_.bindParam("xShift", &xShift_);
-    engine_.bindParam("yShift", &yShift_);
-    engine_.bindParam("xFreq", &xFreq_);
-    engine_.bindParam("yFreq", &yFreq_);
-    engine_.bindParam("blendFactor", &blendFactor_);
-    engine_.bindParam("innerSwirl", &innerSwirl_);
-    engine_.bindParam("outerSwirl", &outerSwirl_);
-    engine_.bindParam("midDrift", &midDrift_);
-    engine_.bindParam("angularStep", &angularStep_);
-    engine_.bindParam("viscosity", &viscosity_);
-    engine_.bindParam("vorticity", &vorticity_);
-    engine_.bindParam("gravity", &gravity_);
-
     onSizeChanged();  // (onSizeChanged not implemented for ProducerModule yet in projectMM)
   }
 
@@ -129,13 +91,53 @@ class FlowFieldsEffect : public ProducerModule {
     // own member floats, not into the (now-freed) grid buffers.
   }
 
-  void onUpdate(const char* key) override {
-    if (strcmp(key, "emitter") == 0) {
-      emitterIdxFloat_ = emitterIdx_;
-    }
-    if (strcmp(key, "flow") == 0) {
-      flowIdxFloat_ = flowIdx_;
-    }
+  // Called by projectMM whenever any control value changes — out of the render hot path.
+  void onUpdate(const char* /*name*/) override {
+    engine_._emitter = emitterIdx_;
+    engine_._flow = flowIdx_;
+    engine_.globalSpeed = globalSpeed_;
+    engine_.persistence = persistence_;
+    engine_.colorShift = colorShift_;
+
+    engine_.orbitalDots.numDots = numDots_;
+    engine_.swarmingDots.numDots = numDots_;
+    engine_.orbitalDots.dotDiam = dotDiam_;
+    engine_.swarmingDots.dotDiam = dotDiam_;
+
+    engine_.orbitalDots.orbitSpeed = orbitSpeed_;
+    engine_.orbitalDots.orbitDiam = orbitDiam_;
+    engine_.swarmingDots.swarmSpeed = swarmSpeed_;
+    engine_.swarmingDots.swarmSpread = swarmSpread_;
+    engine_.lissajous.lineSpeed = lineSpeed_;
+    engine_.lissajous.lineAmp = lineAmp_;
+    engine_.noiseKaleido.driftSpeed = driftSpeed_;
+    engine_.noiseKaleido.noiseScale = noiseScale_;
+    engine_.noiseKaleido.noiseBand = noiseBand_;
+    engine_.cube.scale = scale_;
+    engine_.cube.rotateSpeed[0] = rotateSpeedX_;
+    engine_.cube.rotateSpeed[1] = rotateSpeedY_;
+    engine_.cube.rotateSpeed[2] = rotateSpeedZ_;
+    engine_.fluidJet.jetForce = jetForce_;
+    engine_.fluidJet.jetAngle = jetAngle_;
+
+    engine_.noiseFlow.xSpeed = xSpeed_;
+    engine_.noiseFlow.ySpeed = ySpeed_;
+    engine_.noiseFlow.xShift = xShift_;
+    engine_.noiseFlow.yShift = yShift_;
+    engine_.noiseFlow.xFreq = xFreq_;
+    engine_.noiseFlow.yFreq = yFreq_;
+
+    engine_.radial.blendFactor = blendFactor_;
+    engine_.directional.blendFactor = blendFactor_;
+    engine_.spiral.blendFactor = blendFactor_;
+
+    engine_.ringFlow.innerSwirl = innerSwirl_;
+    engine_.ringFlow.outerSwirl = outerSwirl_;
+    engine_.ringFlow.midDrift = midDrift_;
+    engine_.spiral.angularStep = angularStep_;
+    engine_.fluid.viscosity = viscosity_;
+    engine_.fluid.vorticity = vorticity_;
+    engine_.fluid.gravity = gravity_;
   }
 
   // ── Hot path ─────────────────────────────────────────────────────
@@ -148,14 +150,14 @@ class FlowFieldsEffect : public ProducerModule {
   flowFields::FlowFieldsEngine engine_;
 
   // ── projectMM-owned floats — one per bound parameter ─────────────
-  uint8_t emitterIdx_ = 0.0f;
-  uint8_t flowIdx_ = 0.0f;
+  uint8_t emitterIdx_ = 0;
+  uint8_t flowIdx_ = 0;
   float emitterIdxFloat_ = 0.0f;
   float flowIdxFloat_ = 0.0f;
   float globalSpeed_ = 1.0f;
   float persistence_ = 0.05f;
   float colorShift_ = 0.20f;
-  float numDots_ = 3.0f;
+  uint8_t numDots_ = 3.0;
   float dotDiam_ = 1.5f;
   float orbitSpeed_ = 2.0f;
   float orbitDiam_ = 6.6f;
