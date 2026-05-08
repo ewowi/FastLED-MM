@@ -9,11 +9,11 @@
 #include <FastLED.h>
 #include <projectMM.h>
 
-#include "FlowFieldsEngine.h"
+#include "FlowFieldsModule.h"  // v2 façade — replaces FlowFieldsEngine.h
 
 constexpr uint8_t PIN = 2;       // data pin to the first LED strip
-constexpr uint16_t WIDTH = 44;   // panel width in pixels
-constexpr uint16_t HEIGHT = 44;  // panel height in pixels
+constexpr uint16_t WIDTH = 16;   // panel width in pixels
+constexpr uint16_t HEIGHT = 16;  // panel height in pixels
 constexpr uint16_t NUM_LEDS = WIDTH * HEIGHT;
 
 // XY mapping for this panel — replace with your own.
@@ -22,9 +22,28 @@ static uint32_t XY(uint16_t x, uint16_t y) { return (uint32_t)y * WIDTH + x; }
 // Logical pixel array — written by effects in row-major order, read by PreviewModule.
 CRGB leds[NUM_LEDS];
 
+// ── Parameter ranges — one row per slider registered in the UI ──────
+// Mirrors VISUALIZER_PARAMETER_REGISTRY in index.html.
+// Used by registerControls() to add controls by name without hardcoding
+// each addControl() call per emitter/flow.
+struct ParamRange {
+  const char* name;
+  float lo, hi;
+};
+static const ParamRange PARAM_RANGES[] = {
+    {"globalSpeed", 0.1f, 5.0f}, {"persistence", 0.01f, 2.0f}, {"colorShift", 0.0f, 1.0f}, {"numDots", 1.0f, 20.0f}, {"dotDiam", 0.5f, 5.0f}, {"orbitSpeed", 0.01f, 25.0f}, {"orbitDiam", 1.0f, 30.0f}, {"swarmSpeed", 0.01f, 5.0f}, {"swarmSpread", 0.0f, 1.0f}, {"lineSpeed", 0.01f, 5.0f}, {"lineAmp", 1.0f, 20.0f}, {"driftSpeed", 0.0f, 2.0f}, {"noiseScale", 0.001f, 0.2f}, {"noiseBand", 0.01f, 0.5f}, {"scale", 0.1f, 3.0f}, {"rotateSpeedX", -5.0f, 5.0f}, {"rotateSpeedY", -5.0f, 5.0f}, {"rotateSpeedZ", -5.0f, 5.0f}, {"jetForce", 0.0f, 2.0f}, {"jetAngle", -3.14f, 3.14f}, {"xSpeed", -5.0f, 5.0f}, {"ySpeed", -5.0f, 5.0f}, {"xShift", 0.0f, 5.0f}, {"yShift", 0.0f, 5.0f}, {"xFreq", 0.01f, 2.0f}, {"yFreq", 0.01f, 2.0f}, {"blendFactor", 0.0f, 1.0f}, {"innerSwirl", -1.0f, 1.0f}, {"outerSwirl", -1.0f, 1.0f}, {"midDrift", 0.0f, 1.0f}, {"angularStep", 0.0f, 1.0f}, {"viscosity", 0.0f, 0.01f}, {"vorticity", 0.0f, 20.0f}, {"gravity", -2.0f, 2.0f},
+};
+
+// ── Member-variable lookup for onUpdate dispatch ─────────────────────
+// Maps parameter name to the address of the corresponding float member.
+// Kept as a pointer so the table can reference members via offsetof.
+struct Binding {
+  const char* name;
+  float* ptr;
+};
+
 class FlowFieldsEffect : public ProducerModule {
  public:
-  // ── Identity ─────────────────────────────────────────────────────
   const char* name() const override { return "FlowFields"; }
   const char* category() const override { return "source"; }
   uint8_t preferredCore() const override { return 0; }
@@ -32,162 +51,117 @@ class FlowFieldsEffect : public ProducerModule {
   uint16_t pixelWidth() const override { return WIDTH; }
   uint16_t pixelHeight() const override { return HEIGHT; }
 
-  // ── Setup ────────────────────────────────────────────────────────
   void setup() override {
     declareBuffer(leds, NUM_LEDS, sizeof(CRGB));
+    ff_.setup(WIDTH, HEIGHT, XY, leds, NUM_LEDS);
+    rebuildControls();
+  }
 
-    // 1. Register controls — projectMM owns and updates these floats.
+  // Called by projectMM when emitter/flow changes — shows only relevant sliders.
+  void rebuildControls() override {
+    clearControls();
+
     addControl(emitterIdx_, "emitter", "select");
-    for (int i = 0; i < EMITTER_COUNT; i++) addControlValue(EMITTER_NAMES[i]);
+    for (uint8_t i = 0; i < ff_.emitterCount(); i++) addControlValue(ff_.emitterName(i));
 
     addControl(flowIdx_, "flow", "select");
-    for (int i = 0; i < FLOW_COUNT; i++) addControlValue(FLOW_NAMES[i]);
+    for (uint8_t i = 0; i < ff_.flowCount(); i++) addControlValue(ff_.flowName(i));
 
-    addControl(globalSpeed_, "globalSpeed", "slider", 0.1f, 5.0f);
-    addControl(persistence_, "persistence", "slider", 0.01f, 2.0f);
-    addControl(colorShift_, "colorShift", "slider", 0.0f, 1.0f);
-    addControl(numDots_, "numDots", "slider", 1, 20);
-    addControl(dotDiam_, "dotDiam", "slider", 0.5f, 5.0f);
-    addControl(orbitSpeed_, "orbitSpeed", "slider", 0.01f, 25.0f);
-    addControl(orbitDiam_, "orbitDiam", "slider", 1.0f, 30.0f);
-    addControl(swarmSpeed_, "swarmSpeed", "slider", 0.01f, 5.0f);
-    addControl(swarmSpread_, "swarmSpread", "slider", 0.0f, 1.0f);
-    addControl(lineSpeed_, "lineSpeed", "slider", 0.01f, 5.0f);
-    addControl(lineAmp_, "lineAmp", "slider", 1.0f, 20.0f);
-    addControl(driftSpeed_, "driftSpeed", "slider", 0.0f, 2.0f);
-    addControl(noiseScale_, "noiseScale", "slider", 0.001f, 0.2f);
-    addControl(noiseBand_, "noiseBand", "slider", 0.01f, 0.5f);
-    addControl(scale_, "scale", "slider", 0.1f, 3.0f);
-    addControl(rotateSpeedX_, "rotateSpeedX", "slider", -5.0f, 5.0f);
-    addControl(rotateSpeedY_, "rotateSpeedY", "slider", -5.0f, 5.0f);
-    addControl(rotateSpeedZ_, "rotateSpeedZ", "slider", -5.0f, 5.0f);
-    addControl(jetForce_, "jetForce", "slider", 0.0f, 2.0f);
-    addControl(jetAngle_, "jetAngle", "slider", -3.14f, 3.14f);
-    addControl(xSpeed_, "xSpeed", "slider", -5.0f, 5.0f);
-    addControl(ySpeed_, "ySpeed", "slider", -5.0f, 5.0f);
-    addControl(xShift_, "xShift", "slider", 0.0f, 5.0f);
-    addControl(yShift_, "yShift", "slider", 0.0f, 5.0f);
-    addControl(xFreq_, "xFreq", "slider", 0.01f, 2.0f);
-    addControl(yFreq_, "yFreq", "slider", 0.01f, 2.0f);
-    addControl(blendFactor_, "blendFactor", "slider", 0.0f, 1.0f);
-    addControl(innerSwirl_, "innerSwirl", "slider", -1.0f, 1.0f);
-    addControl(outerSwirl_, "outerSwirl", "slider", -1.0f, 1.0f);
-    addControl(midDrift_, "midDrift", "slider", 0.0f, 1.0f);
-    addControl(angularStep_, "angularStep", "slider", 0.0f, 1.0f);
-    addControl(viscosity_, "viscosity", "slider", 0.0f, 0.01f);
-    addControl(vorticity_, "vorticity", "slider", 0.0f, 20.0f);
-    addControl(gravity_, "gravity", "slider", -2.0f, 2.0f);
+    auto globals = ff_.getGlobalParams();
+    for (uint8_t i = 0; i < globals.count; i++) addControlByName(globals.names[i]);
 
-    // 2. Initialise the engine for this panel.
-    engine_.setup(WIDTH, HEIGHT, NUM_LEDS, XY);
+    auto ep = ff_.getEmitterParams(emitterIdx_);
+    for (uint8_t i = 0; i < ep.count; i++) addControlByName(ep.names[i]);
 
-    onSizeChanged();  // (onSizeChanged not implemented for ProducerModule yet in projectMM)
+    auto fp = ff_.getFlowParams(flowIdx_);
+    for (uint8_t i = 0; i < fp.count; i++) addControlByName(fp.names[i]);
   }
 
-  void onSizeChanged() {  // override (onSizeChanged not implemented for ProducerModule yet in projectMM)
-    engine_.teardown();
-    engine_.setup(pixelWidth(), pixelHeight(), pixelWidth() * pixelHeight(), XY);
-    // Bindings survive teardown/setup — they point into this object's
-    // own member floats, not into the (now-freed) grid buffers.
+  void onUpdate(const char* name) override {
+    if (strcmp(name, "emitter") == 0) { ff_.setEmitter(emitterIdx_); rebuildControls(); return; }
+    if (strcmp(name, "flow")    == 0) { ff_.setFlow(flowIdx_);        rebuildControls(); return; }
+
+    for (const auto& b : bindings_) {
+      if (strcasecmp(name, b.name) == 0) { ff_.setParameter(name, *b.ptr); return; }
+    }
   }
 
-  // Called by projectMM whenever any control value changes — out of the render hot path.
-  void onUpdate(const char* /*name*/) override {
-    engine_._emitter = emitterIdx_;
-    engine_._flow = flowIdx_;
-    engine_.globalSpeed = globalSpeed_;
-    engine_.persistence = persistence_;
-    engine_.colorShift = colorShift_;
-
-    engine_.orbitalDots.numDots = numDots_;
-    engine_.swarmingDots.numDots = numDots_;
-    engine_.orbitalDots.dotDiam = dotDiam_;
-    engine_.swarmingDots.dotDiam = dotDiam_;
-
-    engine_.orbitalDots.orbitSpeed = orbitSpeed_;
-    engine_.orbitalDots.orbitDiam = orbitDiam_;
-    engine_.swarmingDots.swarmSpeed = swarmSpeed_;
-    engine_.swarmingDots.swarmSpread = swarmSpread_;
-    engine_.lissajous.lineSpeed = lineSpeed_;
-    engine_.lissajous.lineAmp = lineAmp_;
-    engine_.noiseKaleido.driftSpeed = driftSpeed_;
-    engine_.noiseKaleido.noiseScale = noiseScale_;
-    engine_.noiseKaleido.noiseBand = noiseBand_;
-    engine_.cube.scale = scale_;
-    engine_.cube.rotateSpeed[0] = rotateSpeedX_;
-    engine_.cube.rotateSpeed[1] = rotateSpeedY_;
-    engine_.cube.rotateSpeed[2] = rotateSpeedZ_;
-    engine_.fluidJet.jetForce = jetForce_;
-    engine_.fluidJet.jetAngle = jetAngle_;
-
-    engine_.noiseFlow.xSpeed = xSpeed_;
-    engine_.noiseFlow.ySpeed = ySpeed_;
-    engine_.noiseFlow.xShift = xShift_;
-    engine_.noiseFlow.yShift = yShift_;
-    engine_.noiseFlow.xFreq = xFreq_;
-    engine_.noiseFlow.yFreq = yFreq_;
-
-    engine_.radial.blendFactor = blendFactor_;
-    engine_.directional.blendFactor = blendFactor_;
-    engine_.spiral.blendFactor = blendFactor_;
-
-    engine_.ringFlow.innerSwirl = innerSwirl_;
-    engine_.ringFlow.outerSwirl = outerSwirl_;
-    engine_.ringFlow.midDrift = midDrift_;
-    engine_.spiral.angularStep = angularStep_;
-    engine_.fluid.viscosity = viscosity_;
-    engine_.fluid.vorticity = vorticity_;
-    engine_.fluid.gravity = gravity_;
-  }
-
-  // ── Hot path ─────────────────────────────────────────────────────
-  void loop() override { engine_.run(leds); }
-
-  void teardown() override { engine_.teardown(); }
+  void loop()     override { ff_.loop(); }
+  void teardown() override { ff_.teardown(); }
   size_t classSize() const override { return sizeof(*this); }
 
  private:
-  flowFields::FlowFieldsEngine engine_;
+  FlowFieldsModule ff_;
 
-  // ── projectMM-owned floats — one per bound parameter ─────────────
   uint8_t emitterIdx_ = 0;
-  uint8_t flowIdx_ = 0;
-  float emitterIdxFloat_ = 0.0f;
-  float flowIdxFloat_ = 0.0f;
-  float globalSpeed_ = 1.0f;
-  float persistence_ = 0.05f;
-  float colorShift_ = 0.20f;
-  uint8_t numDots_ = 3.0;
-  float dotDiam_ = 1.5f;
-  float orbitSpeed_ = 2.0f;
-  float orbitDiam_ = 6.6f;
-  float swarmSpeed_ = 0.5f;
-  float swarmSpread_ = 0.5f;
-  float lineSpeed_ = 0.35f;
-  float lineAmp_ = 13.5f;
-  float driftSpeed_ = 0.35f;
-  float noiseScale_ = 0.0375f;
-  float noiseBand_ = 0.1f;
-  float scale_ = 1.0f;
-  float rotateSpeedX_ = 0.6f;
-  float rotateSpeedY_ = 0.9f;
-  float rotateSpeedZ_ = 0.3f;
-  float jetForce_ = 0.35f;
-  float jetAngle_ = 0.0f;
-  float xSpeed_ = 0.15f;
-  float ySpeed_ = 0.15f;
-  float xShift_ = 1.5f;
-  float yShift_ = 1.5f;
-  float xFreq_ = 0.33f;
-  float yFreq_ = 0.32f;
-  float blendFactor_ = 0.45f;
-  float innerSwirl_ = -0.2f;
-  float outerSwirl_ = 0.2f;
-  float midDrift_ = 0.3f;
-  float angularStep_ = 0.28f;
-  float viscosity_ = 0.0005f;
-  float vorticity_ = 7.0f;
-  float gravity_ = 0.3f;
+  uint8_t flowIdx_    = 0;
+  float globalSpeed_   = 1.0f;
+  float persistence_   = 0.05f;
+  float colorShift_    = 0.20f;
+  float numDots_       = 3.0f;
+  float dotDiam_       = 1.5f;
+  float orbitSpeed_    = 2.0f;
+  float orbitDiam_     = 6.6f;
+  float swarmSpeed_    = 0.5f;
+  float swarmSpread_   = 0.5f;
+  float lineSpeed_     = 0.35f;
+  float lineAmp_       = 13.5f;
+  float driftSpeed_    = 0.35f;
+  float noiseScale_    = 0.0375f;
+  float noiseBand_     = 0.1f;
+  float scale_         = 1.0f;
+  float rotateSpeedX_  = 0.6f;
+  float rotateSpeedY_  = 0.9f;
+  float rotateSpeedZ_  = 0.3f;
+  float jetForce_      = 0.35f;
+  float jetAngle_      = 0.0f;
+  float xSpeed_        = 0.15f;
+  float ySpeed_        = 0.15f;
+  float xShift_        = 1.5f;
+  float yShift_        = 1.5f;
+  float xFreq_         = 0.33f;
+  float yFreq_         = 0.32f;
+  float blendFactor_   = 0.45f;
+  float innerSwirl_    = -0.2f;
+  float outerSwirl_    = 0.2f;
+  float midDrift_      = 0.3f;
+  float angularStep_   = 0.28f;
+  float viscosity_     = 0.0005f;
+  float vorticity_     = 7.0f;
+  float gravity_       = 0.3f;
+
+  const Binding bindings_[34] = {
+      {"globalSpeed",  &globalSpeed_},  {"persistence",  &persistence_},
+      {"colorShift",   &colorShift_},   {"numDots",      &numDots_},
+      {"dotDiam",      &dotDiam_},      {"orbitSpeed",   &orbitSpeed_},
+      {"orbitDiam",    &orbitDiam_},    {"swarmSpeed",   &swarmSpeed_},
+      {"swarmSpread",  &swarmSpread_},  {"lineSpeed",    &lineSpeed_},
+      {"lineAmp",      &lineAmp_},      {"driftSpeed",   &driftSpeed_},
+      {"noiseScale",   &noiseScale_},   {"noiseBand",    &noiseBand_},
+      {"scale",        &scale_},        {"rotateSpeedX", &rotateSpeedX_},
+      {"rotateSpeedY", &rotateSpeedY_}, {"rotateSpeedZ", &rotateSpeedZ_},
+      {"jetForce",     &jetForce_},     {"jetAngle",     &jetAngle_},
+      {"xSpeed",       &xSpeed_},       {"ySpeed",       &ySpeed_},
+      {"xShift",       &xShift_},       {"yShift",       &yShift_},
+      {"xFreq",        &xFreq_},        {"yFreq",        &yFreq_},
+      {"blendFactor",  &blendFactor_},  {"innerSwirl",   &innerSwirl_},
+      {"outerSwirl",   &outerSwirl_},   {"midDrift",     &midDrift_},
+      {"angularStep",  &angularStep_},  {"viscosity",    &viscosity_},
+      {"vorticity",    &vorticity_},    {"gravity",      &gravity_},
+  };
+
+  // Look up name in PARAM_RANGES + bindings_ and call addControl.
+  void addControlByName(const char* name) {
+    for (const auto& r : PARAM_RANGES) {
+      if (strcmp(name, r.name) != 0) continue;
+      for (const auto& b : bindings_) {
+        if (strcmp(name, b.name) == 0) {
+          addControl(*b.ptr, name, "slider", r.lo, r.hi);
+          return;
+        }
+      }
+    }
+  }
 };
 
 REGISTER_MODULE(FlowFieldsEffect)
@@ -281,11 +255,14 @@ static void firstBoot(ModuleManager& mm) {
   //   mm.addModule("WaveRainbow2DEffect", "fx1", ep, ep, 0, "");
   // }
 
+  
   if (!pal::hasModuleType(mm, "FlowFieldsEffect")) {
+    Serial.printf("Add FlowFieldsEffect\n");
     mm.addModule("FlowFieldsEffect", "fx1", ep, ep, 0, "");
   }
 
   if (!pal::hasModuleType(mm, "FastLEDDriverModule")) {
+    Serial.printf("Add FastLEDDriverModule\n");
     mm.addModule("FastLEDDriverModule", "driver1", ep, ep, 1, "");
   }
 
@@ -293,6 +270,7 @@ static void firstBoot(ModuleManager& mm) {
   if (!pal::hasModuleType(mm, "PreviewModule")) {
     JsonDocument inp;  // No width/height props needed: PreviewModule reads geometry from source via pixelBuf().
     inp["source"] = "fx1";
+    Serial.printf("Add PreviewModule\n");
     mm.addModule("PreviewModule", "preview1", ep, inp.as<JsonObjectConst>(), 1, "");
   }
 
